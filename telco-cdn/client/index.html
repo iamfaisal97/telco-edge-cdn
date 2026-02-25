@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Telco-Edge CDN Client</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; background: #f5f5f5; }
+        h1 { color: #333; }
+        select, button { padding: 10px; font-size: 16px; margin: 10px 5px; }
+        video { width: 100%; border-radius: 8px; margin-top: 20px; background: #000; }
+        #status { margin-top: 10px; padding: 10px; background: #e8f5e9; border-radius: 4px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>🌐 Telco-Edge CDN</h1>
+    
+    <select id="videoSelect">
+        <option value="videoA.mp4">Video A (Big Buck Bunny)</option>
+        <option value="videoB.mp4">Video B (Elephants Dream)</option>
+    </select>
+    
+    <button onclick="loadVideo()">▶ Load Video</button>
+    <button onclick="checkCache()">📊 Check Cache Status</button>
+
+    <div id="status">Status will appear here...</div>
+    <video id="player" controls></video>
+
+    <script>
+        const EDGE_URL = 'http://localhost:5001'; // Edge server
+
+        function loadVideo() {
+            const videoId = document.getElementById('videoSelect').value;
+            const player = document.getElementById('player');
+            const status = document.getElementById('status');
+            
+            const url = `${EDGE_URL}/video/${videoId}`;
+            status.textContent = `Loading ${videoId} from edge... (watch your terminal for HIT or MISS)`;
+            
+            player.src = url;
+            player.load();
+            player.play().catch(() => {}); // autoplay may be blocked, that's fine
+        }
+
+        async function checkCache() {
+            const res = await fetch(`${EDGE_URL}/cache-status`);
+            const data = await res.json();
+            document.getElementById('status').textContent = 
+                `Cache on ${data.edge_id}: [${data.cached_videos.join(', ') || 'empty'}] (${data.count} videos)`;
+        }
+    </script>
+</body>
+</html>
