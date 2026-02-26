@@ -1,0 +1,38 @@
+# Video files - too large for git
+videos/
+*.mp4
+*.mkv
+*.avi
+
+# Cache folders - generated at runtime
+cache/
+edge/cache/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# Virtual environment
+venv/
+env/
+.env
+
+# Logs and database - generated at runtime
+logs/
+*.db
+*.csv
+*.log
+
+# Docker volumes - managed by Docker
+volumes/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Analytics output - generated at runtime
+analytics_report.json

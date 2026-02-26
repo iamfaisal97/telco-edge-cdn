@@ -4,7 +4,9 @@ from flask import Flask, send_file, jsonify
 
 app = Flask(__name__)
 
-VIDEO_DIR = r'C:\telco-edge-cdn\telco-cdn\videos'
+VIDEO_DIR = os.environ.get('VIDEO_DIR', r'C:\telco-edge-cdn\telco-cdn\videos')
+VIDEO_DIR = os.path.abspath(VIDEO_DIR)
+print(f"[CORE] Video directory: {VIDEO_DIR}")
 
 @app.route('/videos', methods=['GET'])
 def list_videos():
