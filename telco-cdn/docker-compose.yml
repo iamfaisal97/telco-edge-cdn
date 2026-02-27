@@ -7,7 +7,7 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ./videos:/app/videos  # core reads from your local videos folder
+      - ./videos:/app/videos
     environment:
       - VIDEO_DIR=/app/videos
 
@@ -16,12 +16,15 @@ services:
     ports:
       - "5001:5001"
     volumes:
-      - edge1_cache:/app/cache  # each edge has its OWN isolated cache
+      - edge1_cache:/app/cache
+      - ./logs:/logs          # shared logs folder
     environment:
       - EDGE_ID=edge1
       - CORE_URL=http://core:5000
       - REDIS_HOST=redis
       - PORT=5001
+      - MAX_CACHE_SIZE=3
+      - LOG_DB=/logs/requests.db
     depends_on:
       - core
       - redis
@@ -32,11 +35,14 @@ services:
       - "5002:5002"
     volumes:
       - edge2_cache:/app/cache
+      - ./logs:/logs          # same shared logs folder
     environment:
       - EDGE_ID=edge2
       - CORE_URL=http://core:5000
       - REDIS_HOST=redis
       - PORT=5002
+      - MAX_CACHE_SIZE=3
+      - LOG_DB=/logs/requests.db
     depends_on:
       - core
       - redis
@@ -47,17 +53,20 @@ services:
       - "5003:5003"
     volumes:
       - edge3_cache:/app/cache
+      - ./logs:/logs          # same shared logs folder
     environment:
       - EDGE_ID=edge3
       - CORE_URL=http://core:5000
       - REDIS_HOST=redis
       - PORT=5003
+      - MAX_CACHE_SIZE=3
+      - LOG_DB=/logs/requests.db
     depends_on:
       - core
       - redis
 
   redis:
-    image: redis:7-alpine  # no Dockerfile needed, use official image
+    image: redis:7-alpine
     ports:
       - "6379:6379"
 
