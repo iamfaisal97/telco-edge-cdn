@@ -2,6 +2,7 @@
 import os
 import time
 import sqlite3
+import threading
 import requests
 import redis
 from flask import Flask, send_file, jsonify, request, g
@@ -227,6 +228,95 @@ def get_logs():
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({"status": "ok", "edge_id": EDGE_ID})
+
+
+# ─────────────────────────────────────────
+# REPLICATION SYNC
+# ─────────────────────────────────────────
+
+last_sync_time = None
+last_sync_replicated = []
+
+def replication_sync():
+    """
+    Background thread — runs every 30 seconds.
+    Checks Redis to see what other edges have cached.
+    If a popular video exists on another edge but not here, fetch it.
+    This is 'eventual consistency' — edges converge over time.
+    """
+    global last_sync_time, last_sync_replicated
+
+    # Map edge IDs to their internal Docker URLs
+    EDGE_URLS = {
+        'edge1': 'http://edge1:5001',
+        'edge2': 'http://edge2:5002',
+        'edge3': 'http://edge3:5003',
+    }
+
+    while True:
+        time.sleep(30)
+        replicated_this_cycle = []
+
+        try:
+            print(f"[{EDGE_ID}] Running replication sync...", flush=True)
+
+            # Get top 5 popular videos from Redis
+            top_videos = r.zrevrange('popular_videos', 0, 4)
+
+            for video_id in top_videos:
+                cache_path = os.path.join(CACHE_DIR, video_id)
+
+                # Skip if we already have it
+                if os.path.exists(cache_path):
+                    continue
+
+                # Find which other edge has this video
+                for other_edge, other_url in EDGE_URLS.items():
+                    if other_edge == EDGE_ID:
+                        continue
+
+                    redis_key = f"cache:{other_edge}:{video_id}"
+                    if r.exists(redis_key):
+                        # Another edge has it — fetch from them
+                        print(f"[{EDGE_ID}] Replicating {video_id} from {other_edge}...", flush=True)
+                        try:
+                            evict_if_needed()
+                            resp = requests.get(f"{other_url}/video/{video_id}", stream=True, timeout=30)
+                            if resp.status_code == 200:
+                                with open(cache_path, 'wb') as f:
+                                    for chunk in resp.iter_content(chunk_size=8192):
+                                        f.write(chunk)
+                                r.set(f"cache:{EDGE_ID}:{video_id}", 1)
+                                replicated_this_cycle.append(video_id)
+                                print(f"[{EDGE_ID}] Replicated {video_id} from {other_edge} ✓", flush=True)
+                                break
+                        except Exception as e:
+                            print(f"[{EDGE_ID}] Replication error: {e}", flush=True)
+
+            last_sync_time = time.strftime('%Y-%m-%d %H:%M:%S')
+            last_sync_replicated = replicated_this_cycle
+            print(f"[{EDGE_ID}] Sync complete. Replicated: {replicated_this_cycle}", flush=True)
+
+        except Exception as e:
+            print(f"[{EDGE_ID}] Sync error: {e}", flush=True)
+
+
+@app.route('/sync-status', methods=['GET'])
+def sync_status():
+    """Show last sync time and what was replicated."""
+    return jsonify({
+        "edge_id": EDGE_ID,
+        "last_sync_time": last_sync_time,
+        "last_sync_replicated": last_sync_replicated,
+        "current_cache": os.listdir(CACHE_DIR)
+    })
+
+
+# Start replication thread when app starts
+sync_thread = threading.Thread(target=replication_sync, daemon=True)
+sync_thread.start()
+print(f"[{EDGE_ID}] Replication sync thread started", flush=True)
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))

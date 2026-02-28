@@ -70,6 +70,18 @@ services:
     ports:
       - "6379:6379"
 
+  analytics:
+    build: ./analytics
+    ports:
+      - "5010:5010"
+    volumes:
+      - ./logs:/logs
+    environment:
+      - LOG_DB=/logs/requests.db
+      - REPORT_PATH=/logs/analytics_report.json
+    depends_on:
+      - redis
+
   nginx:
     image: nginx:alpine
     ports:
