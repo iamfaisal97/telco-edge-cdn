@@ -1,7 +1,6 @@
-version: '3.8'
+version: "3.8"
 
 services:
-
   core:
     build: ./core
     ports:
@@ -10,6 +9,13 @@ services:
       - ./videos:/app/videos
     environment:
       - VIDEO_DIR=/app/videos
+      - ANALYTICS_URL=http://analytics:5010
+    cap_add:
+      - NET_ADMIN
+    depends_on:
+      - analytics
+    networks:
+      - core_network
 
   edge1:
     build: ./edge
@@ -17,7 +23,7 @@ services:
       - "5001:5001"
     volumes:
       - edge1_cache:/app/cache
-      - ./logs:/logs          # shared logs folder
+      - ./logs:/logs
     environment:
       - EDGE_ID=edge1
       - CORE_URL=http://core:5000
@@ -25,9 +31,18 @@ services:
       - PORT=5001
       - MAX_CACHE_SIZE=3
       - LOG_DB=/logs/requests.db
+      - SIMULATED_LATENCY=10ms
+      - LOCATION=Helsinki
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv4.ip_forward=1
     depends_on:
       - core
       - redis
+    networks:
+      - core_network
+      - edge_network
 
   edge2:
     build: ./edge
@@ -35,7 +50,7 @@ services:
       - "5002:5002"
     volumes:
       - edge2_cache:/app/cache
-      - ./logs:/logs          # same shared logs folder
+      - ./logs:/logs
     environment:
       - EDGE_ID=edge2
       - CORE_URL=http://core:5000
@@ -43,9 +58,18 @@ services:
       - PORT=5002
       - MAX_CACHE_SIZE=3
       - LOG_DB=/logs/requests.db
+      - SIMULATED_LATENCY=15ms
+      - LOCATION=Stockholm
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv4.ip_forward=1
     depends_on:
       - core
       - redis
+    networks:
+      - core_network
+      - edge_network
 
   edge3:
     build: ./edge
@@ -53,7 +77,7 @@ services:
       - "5003:5003"
     volumes:
       - edge3_cache:/app/cache
-      - ./logs:/logs          # same shared logs folder
+      - ./logs:/logs
     environment:
       - EDGE_ID=edge3
       - CORE_URL=http://core:5000
@@ -61,14 +85,26 @@ services:
       - PORT=5003
       - MAX_CACHE_SIZE=3
       - LOG_DB=/logs/requests.db
+      - SIMULATED_LATENCY=12ms
+      - LOCATION=Oslo
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv4.ip_forward=1
     depends_on:
       - core
       - redis
+    networks:
+      - core_network
+      - edge_network
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    networks:
+      - core_network
+      - edge_network
 
   analytics:
     build: ./analytics
@@ -81,6 +117,9 @@ services:
       - REPORT_PATH=/logs/analytics_report.json
     depends_on:
       - redis
+    networks:
+      - core_network
+      - client_network
 
   nginx:
     image: nginx:alpine
@@ -92,8 +131,26 @@ services:
       - edge1
       - edge2
       - edge3
+    networks:
+      - edge_network
+      - client_network
+
+  client:
+    build: ./client
+    ports:
+      - "8080:80"
+    networks:
+      - client_network
 
 volumes:
   edge1_cache:
   edge2_cache:
   edge3_cache:
+
+networks:
+  core_network:
+    driver: bridge
+  edge_network:
+    driver: bridge
+  client_network:
+    driver: bridge

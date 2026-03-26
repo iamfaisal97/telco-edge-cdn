@@ -5,9 +5,12 @@ import sqlite3
 import threading
 import requests
 import redis
+from flask_cors import CORS
 from flask import Flask, send_file, jsonify, request, g
 
 app = Flask(__name__)
+
+CORS(app)
 
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cache')
 CORE_URL = os.environ.get('CORE_URL', 'http://localhost:5000')
@@ -227,7 +230,12 @@ def get_logs():
 
 @app.route('/health', methods=['GET'])
 def health():
-    return jsonify({"status": "ok", "edge_id": EDGE_ID})
+    return jsonify({
+        "status": "ok",
+        "edge_id": EDGE_ID,
+        "location": os.environ.get('LOCATION', 'unknown'),
+        "simulated_latency": os.environ.get('SIMULATED_LATENCY', '10ms')
+    })
 
 
 # ─────────────────────────────────────────
@@ -317,6 +325,52 @@ sync_thread = threading.Thread(target=replication_sync, daemon=True)
 sync_thread.start()
 print(f"[{EDGE_ID}] Replication sync thread started", flush=True)
 
+# ─────────────────────────────────────────
+# PRE-CACHE ENDPOINT
+# ─────────────────────────────────────────
+
+@app.route('/precache', methods=['POST'])
+def precache():
+    """
+    Core calls this to push a video to this edge BEFORE users request it.
+    This is the Edge-Cloud Continuum — cloud intelligence driving edge caching.
+    """
+    data = request.get_json()
+    if not data or 'video_id' not in data:
+        return jsonify({"error": "video_id required"}), 400
+
+    video_id = data['video_id']
+    cache_path = os.path.join(CACHE_DIR, video_id)
+
+    if os.path.exists(cache_path):
+        print(f"[{EDGE_ID}] PRE-CACHE SKIP | {video_id} already cached", flush=True)
+        return jsonify({"status": "already_cached", "video_id": video_id})
+
+    print(f"[{EDGE_ID}] PRE-CACHE START | {video_id} | fetching from core...", flush=True)
+
+    try:
+        evict_if_needed()
+        core_response = requests.get(f"{CORE_URL}/video/{video_id}", stream=True)
+
+        if core_response.status_code != 200:
+            return jsonify({"error": "Video not found on core"}), 404
+
+        with open(cache_path, 'wb') as f:
+            for chunk in core_response.iter_content(chunk_size=8192):
+                f.write(chunk)
+
+        r.set(f"cache:{EDGE_ID}:{video_id}", 1)
+        print(f"[{EDGE_ID}] PRE-CACHE DONE | {video_id} ✓", flush=True)
+
+        return jsonify({
+            "status": "precached",
+            "video_id": video_id,
+            "edge_id": EDGE_ID
+        })
+
+    except Exception as e:
+        print(f"[{EDGE_ID}] PRE-CACHE ERROR | {e}", flush=True)
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))

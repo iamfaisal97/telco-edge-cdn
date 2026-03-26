@@ -3,8 +3,11 @@ import os
 from flask import Flask, jsonify
 from batch_job import run_batch_job
 from predictor import predict_spikes
+from flask_cors import CORS
 
 app = Flask(__name__)
+
+CORS(app)
 
 @app.route('/analytics/report', methods=['GET'])
 def analytics_report():

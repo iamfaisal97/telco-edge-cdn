@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timedelta
 import pandas as pd
 
+
 LOG_DB = os.environ.get('LOG_DB', '/logs/requests.db')
 REPORT_PATH = os.environ.get('REPORT_PATH', '/logs/analytics_report.json')
 
